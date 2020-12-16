@@ -29,7 +29,7 @@ class Seat {
     }
 
     // 查询是否可以购票，用于查询剩余票数
-    public boolean canSelled(int departure, int arrival){
+    public synchronized boolean canSelled(int departure, int arrival){
 //        long stamp = stampedLock.tryOptimisticRead();
         for (int i = departure-1; i < arrival-1; i++){
             if (selled[i]){
