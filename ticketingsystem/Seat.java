@@ -8,7 +8,7 @@ import java.util.concurrent.locks.StampedLock;
  */
 class Seat {
     private volatile boolean[] selled;
-//    // 尝试使用StampedLock优化
+    //    // 尝试使用StampedLock优化
     final StampedLock stampedLock = new StampedLock();
 
     public Seat(int stationnum){
