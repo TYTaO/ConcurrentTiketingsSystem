@@ -1,6 +1,8 @@
 package ticketingsystem;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -17,6 +19,8 @@ public class TicketingDS implements TicketingSystem {
     private List<List<List<Seat>>> seatLists; // 所有座位
     private AtomicLong getTid;
     private ConcurrentHashMap<Long, Ticket> selledTickets;
+    private int[][][] TicketCache;
+    private boolean[][][] isCacheValid;
 
 
     private void init(){
@@ -35,6 +39,8 @@ public class TicketingDS implements TicketingSystem {
             }
             seatLists.add(tempLists);
         }
+        TicketCache = new int[routenum][stationnum-1][stationnum];
+        isCacheValid = new boolean[routenum][stationnum-1][stationnum];
     }
 
     public TicketingDS(){
@@ -61,6 +67,14 @@ public class TicketingDS implements TicketingSystem {
                     long tid = getTid.getAndIncrement();
                     Ticket ticket = getTicket(tid, passenger, route, i+1, j+1, departure, arrival);
                     selledTickets.put(tid, ticket);
+                    // 相应缓存发生了修改
+                    for (int k = 0; k < stationnum-1; k++) {
+                        for (int l = k+1; l < stationnum; l++) {
+                            if (l <= departure-1 || k >= arrival-1)
+                                continue;
+                            isCacheValid[route-1][k][l] = false;
+                        }
+                    }
                     return ticket;
                 }
             }
@@ -70,6 +84,8 @@ public class TicketingDS implements TicketingSystem {
 
     @Override
     public int inquiry(int route, int departure, int arrival) {
+        if (isCacheValid[route-1][departure-1][arrival-1])
+            return TicketCache[route-1][departure-1][arrival-1];
         int count = 0;
         List<List<Seat>> tempLists = seatLists.get(route-1);
         for (int i = 0; i < coachnum; i++){
@@ -79,6 +95,8 @@ public class TicketingDS implements TicketingSystem {
                 }
             }
         }
+        TicketCache[route-1][departure-1][arrival-1] = count;
+        isCacheValid[route-1][departure-1][arrival-1] = true;
         return count;
     }
 
@@ -88,6 +106,14 @@ public class TicketingDS implements TicketingSystem {
         if (isEqual(ticket, selled)){
             selledTickets.remove(selled.tid);
             seatLists.get(selled.route-1).get(selled.coach-1).get(selled.seat-1).free(selled.departure, selled.arrival);
+            // 相应缓存发生了修改
+            for (int k = 0; k < stationnum-1; k++) {
+                for (int l = k+1; l < stationnum; l++) {
+                    if (l <= selled.departure-1 || k >= selled.arrival-1)
+                        continue;
+                    isCacheValid[selled.route-1][k][l] = false;
+                }
+            }
             return true;
         }
         return false;
@@ -96,7 +122,7 @@ public class TicketingDS implements TicketingSystem {
     private boolean isEqual(Ticket A, Ticket B){
         if (A == null || B == null)
             return false;
-        return !(A.tid != B.tid || A.passenger != B.passenger || A.route != B.route
+        return !(A.tid != B.tid || !A.passenger.equals(B.passenger) || A.route != B.route
         || A.coach != B.coach || A.seat != B.seat || A.departure != B.departure || A.arrival != B.arrival);
     }
 

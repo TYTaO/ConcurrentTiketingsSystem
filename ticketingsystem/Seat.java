@@ -9,52 +9,69 @@ import java.util.concurrent.locks.StampedLock;
 class Seat {
     private volatile boolean[] selled;
 //    // 尝试使用StampedLock优化
-//    final StampedLock stampedLock = new StampedLock();
+    final StampedLock stampedLock = new StampedLock();
 
     public Seat(int stationnum){
         selled = new boolean[stationnum-1];
     }
 
     // 尝试购票，成功了就返回true并修改相应区间的值
-    public synchronized boolean tryBuy(int departure, int arrival){
-        for (int i = departure-1; i < arrival-1; i++){
-            if (selled[i]){
-                return false;
+    public boolean tryBuy(int departure, int arrival){
+        long stamp = stampedLock.writeLock();
+        try {
+            for (int i = departure-1; i < arrival-1; i++){
+                if (selled[i]){
+                    return false;
+                }
             }
+            for (int i = departure-1; i < arrival-1; i++){
+                selled[i] = true;
+            }
+            return true;
+        } finally {
+            stampedLock.unlockWrite(stamp);
         }
-        for (int i = departure-1; i < arrival-1; i++){
-            selled[i] = true;
-        }
-        return true;
     }
 
+
     // 查询是否可以购票，用于查询剩余票数
-    public synchronized boolean canSelled(int departure, int arrival){
-//        long stamp = stampedLock.tryOptimisticRead();
+    public boolean canSelled(int departure, int arrival){
+        boolean res = true;
+        long stamp = stampedLock.tryOptimisticRead();
         for (int i = departure-1; i < arrival-1; i++){
             if (selled[i]){
-                return false;
+                res = false;
+                break;
             }
         }
-//        if (!stampedLock.validate(stamp)){
-//            stamp = stampedLock.readLock();
-//            try {
-//                for (int i = departure-1; i < arrival-1; i++){
-//                    if (selled[i]){
-//                        return false;
-//                    }
-//                }
-//            } finally {
-//                stampedLock.unlockRead(stamp);
-//            }
-//        }
-        return true;
+        if (!stampedLock.validate(stamp)){
+            res = true; // 重新来一遍
+            // 升级为悲观读锁
+            stamp = stampedLock.readLock();
+            try {
+                for (int i = departure-1; i < arrival-1; i++){
+                    if (selled[i]){
+                        res = false;
+                        break;
+                    }
+                }
+            } finally {
+                // 释放悲观读锁
+                stampedLock.unlockRead(stamp);
+            }
+        }
+        return res;
     }
 
     // 退票，因为前面会加前置的判断，所以此操作一旦执行，必成功
-    public synchronized void free(int departure, int arrival){
-        for (int i = departure-1; i < arrival-1; i++){
-            selled[i] = false;
+    public void free(int departure, int arrival){
+        long stamp = stampedLock.writeLock();
+        try {
+            for (int i = departure-1; i < arrival-1; i++){
+                selled[i] = false;
+            }
+        } finally {
+            stampedLock.unlockWrite(stamp);
         }
     }
 }
